@@ -6,6 +6,7 @@ import numpy as np
 from dotenv import load_dotenv
 import logging
 from openai import AzureOpenAI
+from lightrag.kg.shared_storage import initialize_pipeline_status
 
 logging.basicConfig(level=logging.INFO)
 
@@ -30,7 +31,7 @@ os.mkdir(WORKING_DIR)
 
 
 async def llm_model_func(
-    prompt, system_prompt=None, history_messages=[], **kwargs
+    prompt, system_prompt=None, history_messages=[], keyword_extraction=False, **kwargs
 ) -> str:
     client = AzureOpenAI(
         api_key=AZURE_OPENAI_API_KEY,
@@ -80,31 +81,46 @@ asyncio.run(test_funcs())
 
 embedding_dimension = 3072
 
-rag = LightRAG(
-    working_dir=WORKING_DIR,
-    llm_model_func=llm_model_func,
-    embedding_func=EmbeddingFunc(
-        embedding_dim=embedding_dimension,
-        max_token_size=8192,
-        func=embedding_func,
-    ),
-)
 
-book1 = open("./book_1.txt", encoding="utf-8")
-book2 = open("./book_2.txt", encoding="utf-8")
+async def initialize_rag():
+    rag = LightRAG(
+        working_dir=WORKING_DIR,
+        llm_model_func=llm_model_func,
+        embedding_func=EmbeddingFunc(
+            embedding_dim=embedding_dimension,
+            max_token_size=8192,
+            func=embedding_func,
+        ),
+    )
 
-rag.insert([book1.read(), book2.read()])
+    await rag.initialize_storages()
+    await initialize_pipeline_status()
 
-query_text = "What are the main themes?"
+    return rag
 
-print("Result (Naive):")
-print(rag.query(query_text, param=QueryParam(mode="naive")))
 
-print("\nResult (Local):")
-print(rag.query(query_text, param=QueryParam(mode="local")))
+def main():
+    rag = asyncio.run(initialize_rag())
 
-print("\nResult (Global):")
-print(rag.query(query_text, param=QueryParam(mode="global")))
+    book1 = open("./book_1.txt", encoding="utf-8")
+    book2 = open("./book_2.txt", encoding="utf-8")
 
-print("\nResult (Hybrid):")
-print(rag.query(query_text, param=QueryParam(mode="hybrid")))
+    rag.insert([book1.read(), book2.read()])
+
+    query_text = "What are the main themes?"
+
+    print("Result (Naive):")
+    print(rag.query(query_text, param=QueryParam(mode="naive")))
+
+    print("\nResult (Local):")
+    print(rag.query(query_text, param=QueryParam(mode="local")))
+
+    print("\nResult (Global):")
+    print(rag.query(query_text, param=QueryParam(mode="global")))
+
+    print("\nResult (Hybrid):")
+    print(rag.query(query_text, param=QueryParam(mode="hybrid")))
+
+
+if __name__ == "__main__":
+    main()

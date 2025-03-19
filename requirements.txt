@@ -1,22 +1,22 @@
-accelerate
-aioboto3
 aiohttp
+configparser
+future
 
-# database packages
-graspologic
-hnswlib
-nano-vectordb
-neo4j
-networkx
-ollama
-openai
-oracledb
-pyvis
+# Basic modules
+gensim
+
+# Additional Packages for export Functionality
+pandas>=2.0.0
+
+# Extra libraries are installed when needed using pipmaster
+
+pipmaster
+pydantic
+python-dotenv
+
+setuptools
 tenacity
-# lmdeploy[all]
 
 # LLM packages
 tiktoken
-torch
-transformers
-xxhash
+xlsxwriter>=3.1.0

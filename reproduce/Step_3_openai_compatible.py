@@ -1,11 +1,9 @@
 import os
 import re
 import json
-import asyncio
 from lightrag import LightRAG, QueryParam
-from tqdm import tqdm
-from lightrag.llm import openai_complete_if_cache, openai_embedding
-from lightrag.utils import EmbeddingFunc
+from lightrag.llm.openai import openai_complete_if_cache, openai_embed
+from lightrag.utils import EmbeddingFunc, always_get_an_event_loop
 import numpy as np
 
 
@@ -26,7 +24,7 @@ async def llm_model_func(
 
 
 async def embedding_func(texts: list[str]) -> np.ndarray:
-    return await openai_embedding(
+    return await openai_embed(
         texts,
         model="solar-embedding-1-large-query",
         api_key=os.getenv("UPSTAGE_API_KEY"),
@@ -56,15 +54,6 @@ async def process_query(query_text, rag_instance, query_param):
         return None, {"query": query_text, "error": str(e)}
 
 
-def always_get_an_event_loop() -> asyncio.AbstractEventLoop:
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    return loop
-
-
 def run_queries_and_save_to_json(
     queries, rag_instance, query_param, output_file, error_file
 ):
@@ -76,7 +65,7 @@ def run_queries_and_save_to_json(
         result_file.write("[\n")
         first_entry = True
 
-        for query_text in tqdm(queries, desc="Processing queries", unit="query"):
+        for query_text in queries:
             result, error = loop.run_until_complete(
                 process_query(query_text, rag_instance, query_param)
             )

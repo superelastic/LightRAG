@@ -1,13 +1,15 @@
 from fastapi import FastAPI, HTTPException, File, UploadFile
+from contextlib import asynccontextmanager
 from pydantic import BaseModel
 import os
 from lightrag import LightRAG, QueryParam
-from lightrag.llm import openai_complete_if_cache, openai_embedding
+from lightrag.llm.openai import openai_complete_if_cache, openai_embed
 from lightrag.utils import EmbeddingFunc
 import numpy as np
 from typing import Optional
 import asyncio
 import nest_asyncio
+from lightrag.kg.shared_storage import initialize_pipeline_status
 
 # Apply nest_asyncio to solve event loop issues
 nest_asyncio.apply()
@@ -24,6 +26,10 @@ EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "text-embedding-3-large")
 print(f"EMBEDDING_MODEL: {EMBEDDING_MODEL}")
 EMBEDDING_MAX_TOKEN_SIZE = int(os.environ.get("EMBEDDING_MAX_TOKEN_SIZE", 8192))
 print(f"EMBEDDING_MAX_TOKEN_SIZE: {EMBEDDING_MAX_TOKEN_SIZE}")
+BASE_URL = os.environ.get("BASE_URL", "https://api.openai.com/v1")
+print(f"BASE_URL: {BASE_URL}")
+API_KEY = os.environ.get("API_KEY", "xxxxxxxx")
+print(f"API_KEY: {API_KEY}")
 
 if not os.path.exists(WORKING_DIR):
     os.mkdir(WORKING_DIR)
@@ -33,13 +39,15 @@ if not os.path.exists(WORKING_DIR):
 
 
 async def llm_model_func(
-    prompt, system_prompt=None, history_messages=[], **kwargs
+    prompt, system_prompt=None, history_messages=[], keyword_extraction=False, **kwargs
 ) -> str:
     return await openai_complete_if_cache(
-        LLM_MODEL,
-        prompt,
+        model=LLM_MODEL,
+        prompt=prompt,
         system_prompt=system_prompt,
         history_messages=history_messages,
+        base_url=BASE_URL,
+        api_key=API_KEY,
         **kwargs,
     )
 
@@ -48,9 +56,11 @@ async def llm_model_func(
 
 
 async def embedding_func(texts: list[str]) -> np.ndarray:
-    return await openai_embedding(
-        texts,
+    return await openai_embed(
+        texts=texts,
         model=EMBEDDING_MODEL,
+        base_url=BASE_URL,
+        api_key=API_KEY,
     )
 
 
@@ -63,16 +73,36 @@ async def get_embedding_dim():
 
 
 # Initialize RAG instance
-rag = LightRAG(
-    working_dir=WORKING_DIR,
-    llm_model_func=llm_model_func,
-    embedding_func=EmbeddingFunc(
-        embedding_dim=asyncio.run(get_embedding_dim()),
-        max_token_size=EMBEDDING_MAX_TOKEN_SIZE,
-        func=embedding_func,
-    ),
-)
+async def init():
+    embedding_dimension = await get_embedding_dim()
 
+    rag = LightRAG(
+        working_dir=WORKING_DIR,
+        llm_model_func=llm_model_func,
+        embedding_func=EmbeddingFunc(
+            embedding_dim=embedding_dimension,
+            max_token_size=EMBEDDING_MAX_TOKEN_SIZE,
+            func=embedding_func,
+        ),
+    )
+
+    await rag.initialize_storages()
+    await initialize_pipeline_status()
+
+    return rag
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global rag
+    rag = await init()
+    print("done!")
+    yield
+
+
+app = FastAPI(
+    title="LightRAG API", description="API for RAG operations", lifespan=lifespan
+)
 
 # Data models
 
@@ -168,7 +198,7 @@ if __name__ == "__main__":
 # curl -X POST "http://127.0.0.1:8020/insert" -H "Content-Type: application/json" -d '{"text": "your text here"}'
 
 # 3. Insert file:
-# curl -X POST "http://127.0.0.1:8020/insert_file" -H "Content-Type: application/json" -d '{"file_path": "path/to/your/file.txt"}'
+# curl -X POST "http://127.0.0.1:8020/insert_file" -H "Content-Type: multipart/form-data" -F "file=@path/to/your/file.txt"
 
 # 4. Health check:
 # curl -X GET "http://127.0.0.1:8020/health"
