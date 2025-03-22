@@ -10,14 +10,7 @@ from lightrag.llm.ollama import ollama_model_complete, ollama_embed
 from lightrag.utils import EmbeddingFunc
 from lightrag.kg.shared_storage import initialize_pipeline_status
 
-# neo4j
-BATCH_SIZE_NODES = 500
-BATCH_SIZE_EDGES = 100
-os.environ["NEO4J_URI"] = "bolt://localhost:7687"
-os.environ["NEO4J_USERNAME"] = "neo4j"
-os.environ["NEO4J_PASSWORD"] = "neo4j"
-
-WORKING_DIR = "/content/drive/MyDrive/LightRagProject/LightRAG//dickens"
+WORKING_DIR = "/content/drive/MyDrive/LightRagProject/LightRAG/dickens"
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 
@@ -42,7 +35,6 @@ async def initialize_rag():
                 texts, embed_model="nomic-embed-text", host="http://localhost:11434"
             ),
         ),
-        graph_storage="Neo4JStorage",
     )
 
     await rag.initialize_storages()
